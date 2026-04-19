@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JSON Viewer</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #ffffff;
+      --fg: #1f2937;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --card: #f9fafb;
+      --string: #065f46;
+      --number: #1d4ed8;
+      --boolean: #7c3aed;
+      --null: #b91c1c;
+      --key: #111827;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f172a;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --border: #334155;
+        --card: #111827;
+        --string: #34d399;
+        --number: #60a5fa;
+        --boolean: #c084fc;
+        --null: #f87171;
+        --key: #f8fafc;
+      }
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      color: var(--fg);
+      background: var(--bg);
+      line-height: 1.4;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 12px;
+      font-size: 1.5rem;
+    }
+
+    p {
+      margin: 0 0 16px;
+      color: var(--muted);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      min-height: 70vh;
+    }
+
+    @media (max-width: 900px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .panel {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--card);
+      padding: 14px;
+      overflow: auto;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 56vh;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      color: var(--fg);
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      margin: 0 0 10px;
+      flex-wrap: wrap;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--fg);
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      filter: brightness(0.96);
+    }
+
+    #error {
+      margin-top: 8px;
+      color: var(--null);
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+    }
+
+    #tree {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.9rem;
+      white-space: normal;
+      word-break: break-word;
+    }
+
+    .node {
+      margin-left: 16px;
+    }
+
+    .line {
+      margin: 2px 0;
+    }
+
+    .toggle {
+      display: inline-block;
+      width: 14px;
+      color: var(--muted);
+      user-select: none;
+      cursor: pointer;
+    }
+
+    .key {
+      color: var(--key);
+      font-weight: 600;
+    }
+
+    .string { color: var(--string); }
+    .number { color: var(--number); }
+    .boolean { color: var(--boolean); }
+    .null { color: var(--null); font-style: italic; }
+    .meta { color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>JSON Viewer</h1>
+  <p>Paste your JSON on the left and click <strong>Render JSON</strong>. You can expand/collapse objects and arrays.</p>
+
+  <div class="layout">
+    <section class="panel">
+      <div class="controls">
+        <button id="renderBtn" type="button">Render JSON</button>
+        <button id="formatBtn" type="button">Format JSON</button>
+        <button id="clearBtn" type="button">Clear</button>
+      </div>
+      <textarea id="jsonInput" spellcheck="false" aria-label="JSON input"></textarea>
+      <div id="error" role="alert"></div>
+    </section>
+
+    <section class="panel">
+      <div id="tree" aria-label="JSON tree output"></div>
+    </section>
+  </div>
+
+  <script>
+    const input = document.getElementById('jsonInput');
+    const tree = document.getElementById('tree');
+    const errorEl = document.getElementById('error');
+    const renderBtn = document.getElementById('renderBtn');
+    const formatBtn = document.getElementById('formatBtn');
+    const clearBtn = document.getElementById('clearBtn');
+
+    // Preload an available JSON file from this repo.
+    fetch('./package.json')
+      .then((response) => response.ok ? response.json() : null)
+      .then((data) => {
+        if (data && !input.value.trim()) {
+          input.value = JSON.stringify(data, null, 2);
+          renderJson();
+        }
+      })
+      .catch(() => {
+        // No-op if package.json is unavailable in another context.
+      });
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+    }
+
+    function valueSpan(value) {
+      if (value === null) return '<span class="null">null</span>';
+      if (typeof value === 'string') return `<span class="string">"${escapeHtml(value)}"</span>`;
+      if (typeof value === 'number') return `<span class="number">${value}</span>`;
+      if (typeof value === 'boolean') return `<span class="boolean">${value}</span>`;
+      return `<span class="meta">${escapeHtml(String(value))}</span>`;
+    }
+
+    function buildNode(value, label = '') {
+      const container = document.createElement('div');
+      container.className = 'node';
+
+      const line = document.createElement('div');
+      line.className = 'line';
+
+      const isObject = value !== null && typeof value === 'object';
+
+      if (!isObject) {
+        line.innerHTML = `${label ? `<span class="key">${escapeHtml(label)}</span>: ` : ''}${valueSpan(value)}`;
+        container.appendChild(line);
+        return container;
+      }
+
+      const isArray = Array.isArray(value);
+      const keys = isArray ? value.map((_, i) => i) : Object.keys(value);
+      const opener = isArray ? '[' : '{';
+      const closer = isArray ? ']' : '}';
+
+      const toggle = document.createElement('span');
+      toggle.className = 'toggle';
+      toggle.textContent = '▾';
+
+      const summary = document.createElement('span');
+      summary.className = 'meta';
+      summary.innerHTML = `${opener} ${keys.length} ${keys.length === 1 ? 'item' : 'items'} ${closer}`;
+
+      line.appendChild(toggle);
+      line.insertAdjacentHTML(
+        'beforeend',
+        `${label ? `<span class="key">${escapeHtml(label)}</span>: ` : ''}${opener}`
+      );
+
+      const children = document.createElement('div');
+      children.className = 'children';
+
+      if (keys.length === 0) {
+        const emptyLine = document.createElement('div');
+        emptyLine.className = 'line meta';
+        emptyLine.textContent = `${isArray ? 'empty array' : 'empty object'}`;
+        children.appendChild(emptyLine);
+      } else {
+        keys.forEach((key) => {
+          const child = buildNode(value[key], isArray ? `[${key}]` : key);
+          children.appendChild(child);
+        });
+      }
+
+      const endLine = document.createElement('div');
+      endLine.className = 'line meta';
+      endLine.textContent = closer;
+      children.appendChild(endLine);
+
+      let open = true;
+      toggle.addEventListener('click', () => {
+        open = !open;
+        children.style.display = open ? 'block' : 'none';
+        toggle.textContent = open ? '▾' : '▸';
+        summary.style.display = open ? 'none' : 'inline';
+      });
+
+      line.appendChild(summary);
+      summary.style.display = 'none';
+
+      container.appendChild(line);
+      container.appendChild(children);
+      return container;
+    }
+
+    function renderJson() {
+      const text = input.value.trim();
+      tree.innerHTML = '';
+      errorEl.textContent = '';
+
+      if (!text) {
+        errorEl.textContent = 'Please paste JSON first.';
+        return;
+      }
+
+      try {
+        const data = JSON.parse(text);
+        tree.appendChild(buildNode(data));
+      } catch (err) {
+        errorEl.textContent = `Invalid JSON:\n${err.message}`;
+      }
+    }
+
+    renderBtn.addEventListener('click', renderJson);
+
+    formatBtn.addEventListener('click', () => {
+      const text = input.value.trim();
+      errorEl.textContent = '';
+      if (!text) return;
+      try {
+        input.value = JSON.stringify(JSON.parse(text), null, 2);
+      } catch (err) {
+        errorEl.textContent = `Cannot format invalid JSON:\n${err.message}`;
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      input.value = '';
+      tree.innerHTML = '';
+      errorEl.textContent = '';
+    });
+  </script>
+</body>
+</html>
