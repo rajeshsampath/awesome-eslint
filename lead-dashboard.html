@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #0f172a;
+      --muted: #64748b;
+      --border: #dbe2ea;
+      --accent: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 24px;
+    }
+
+    h1 { margin: 0 0 6px; }
+    p { margin: 0; color: var(--muted); }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .toolbar {
+      display: grid;
+      gap: 10px;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      resize: vertical;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    button {
+      width: fit-content;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 14px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .error {
+      color: #b91c1c;
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
+
+    .stats {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .charts {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 8px;
+      text-align: left;
+    }
+
+    th { font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.03em; }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Lead Dashboard</h1>
+      <p>Paste your JSON and click render to view KPI cards, graphs, and lead table.</p>
+    </header>
+
+    <section class="card toolbar">
+      <textarea id="jsonInput" spellcheck="false" aria-label="Lead JSON input">
+{
+  "leads": [
+    { "id": 1, "name": "Acme Corp", "source": "Website", "status": "New", "value": 12000, "createdAt": "2026-04-01" },
+    { "id": 2, "name": "Globex", "source": "Referral", "status": "Qualified", "value": 18000, "createdAt": "2026-04-03" },
+    { "id": 3, "name": "Initech", "source": "Ads", "status": "Won", "value": 25000, "createdAt": "2026-04-05" },
+    { "id": 4, "name": "Umbrella", "source": "Website", "status": "Lost", "value": 8000, "createdAt": "2026-04-07" },
+    { "id": 5, "name": "Soylent", "source": "Email", "status": "Qualified", "value": 15000, "createdAt": "2026-04-10" }
+  ]
+}
+      </textarea>
+      <button id="renderBtn" type="button">Render Dashboard</button>
+      <div id="errorBox" class="error" role="alert"></div>
+    </section>
+
+    <section class="stats">
+      <article class="card"><div>Total Leads</div><div id="totalLeads" class="stat-value">0</div></article>
+      <article class="card"><div>Qualified Leads</div><div id="qualifiedLeads" class="stat-value">0</div></article>
+      <article class="card"><div>Won Leads</div><div id="wonLeads" class="stat-value">0</div></article>
+      <article class="card"><div>Conversion Rate</div><div id="conversionRate" class="stat-value">0%</div></article>
+      <article class="card"><div>Total Pipeline Value</div><div id="pipelineValue" class="stat-value">$0</div></article>
+    </section>
+
+    <section class="charts">
+      <article class="card">
+        <h3>Leads by Status</h3>
+        <canvas id="statusChart"></canvas>
+      </article>
+      <article class="card">
+        <h3>Leads by Source</h3>
+        <canvas id="sourceChart"></canvas>
+      </article>
+    </section>
+
+    <section class="card">
+      <h3>Lead Table</h3>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Value</th>
+              <th>Created At</th>
+            </tr>
+          </thead>
+          <tbody id="leadTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const jsonInput = document.getElementById('jsonInput');
+    const renderBtn = document.getElementById('renderBtn');
+    const errorBox = document.getElementById('errorBox');
+    const totalLeadsEl = document.getElementById('totalLeads');
+    const qualifiedLeadsEl = document.getElementById('qualifiedLeads');
+    const wonLeadsEl = document.getElementById('wonLeads');
+    const conversionRateEl = document.getElementById('conversionRate');
+    const pipelineValueEl = document.getElementById('pipelineValue');
+    const leadTableBody = document.getElementById('leadTableBody');
+
+    let statusChart;
+    let sourceChart;
+
+    function normalizeLeads(payload) {
+      if (Array.isArray(payload)) {
+        return payload;
+      }
+      if (payload && Array.isArray(payload.leads)) {
+        return payload.leads;
+      }
+      throw new Error('JSON must be an array of leads or an object with a "leads" array.');
+    }
+
+    function toNumber(value) {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : 0;
+    }
+
+    function countBy(leads, key) {
+      return leads.reduce((acc, lead) => {
+        const group = lead[key] ?? 'Unknown';
+        acc[group] = (acc[group] || 0) + 1;
+        return acc;
+      }, {});
+    }
+
+    function renderCards(leads) {
+      const total = leads.length;
+      const qualified = leads.filter((l) => String(l.status).toLowerCase() === 'qualified').length;
+      const won = leads.filter((l) => String(l.status).toLowerCase() === 'won').length;
+      const conversion = total ? ((won / total) * 100).toFixed(1) : '0.0';
+      const value = leads.reduce((sum, lead) => sum + toNumber(lead.value), 0);
+
+      totalLeadsEl.textContent = total;
+      qualifiedLeadsEl.textContent = qualified;
+      wonLeadsEl.textContent = won;
+      conversionRateEl.textContent = `${conversion}%`;
+      pipelineValueEl.textContent = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        maximumFractionDigits: 0
+      }).format(value);
+    }
+
+    function renderCharts(leads) {
+      const statusCounts = countBy(leads, 'status');
+      const sourceCounts = countBy(leads, 'source');
+
+      if (statusChart) statusChart.destroy();
+      if (sourceChart) sourceChart.destroy();
+
+      statusChart = new Chart(document.getElementById('statusChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(statusCounts),
+          datasets: [{
+            data: Object.values(statusCounts),
+            backgroundColor: ['#2563eb', '#0ea5e9', '#16a34a', '#f97316', '#e11d48', '#7c3aed']
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+
+      sourceChart = new Chart(document.getElementById('sourceChart'), {
+        type: 'bar',
+        data: {
+          labels: Object.keys(sourceCounts),
+          datasets: [{
+            label: 'Leads',
+            data: Object.values(sourceCounts),
+            backgroundColor: '#2563eb'
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+          plugins: { legend: { display: false } }
+        }
+      });
+    }
+
+    function renderTable(leads) {
+      leadTableBody.innerHTML = '';
+      leads.forEach((lead) => {
+        const tr = document.createElement('tr');
+        const value = new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 0
+        }).format(toNumber(lead.value));
+
+        tr.innerHTML = `
+          <td>${lead.id ?? '-'}</td>
+          <td>${lead.name ?? '-'}</td>
+          <td>${lead.source ?? '-'}</td>
+          <td>${lead.status ?? '-'}</td>
+          <td>${value}</td>
+          <td>${lead.createdAt ?? '-'}</td>
+        `;
+        leadTableBody.appendChild(tr);
+      });
+    }
+
+    function renderDashboard() {
+      errorBox.textContent = '';
+      try {
+        const payload = JSON.parse(jsonInput.value);
+        const leads = normalizeLeads(payload);
+        renderCards(leads);
+        renderCharts(leads);
+        renderTable(leads);
+      } catch (error) {
+        errorBox.textContent = `Invalid JSON input:\n${error.message}`;
+      }
+    }
+
+    renderBtn.addEventListener('click', renderDashboard);
+    renderDashboard();
+  </script>
+</body>
+</html>
