@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lead Dashboard Project</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <main class="container">
+    <header class="header">
+      <div>
+        <h1>Lead Dashboard</h1>
+        <p>Dashboard generated from your JSON leads data.</p>
+      </div>
+      <button id="loadDataBtn" type="button">Reload JSON</button>
+    </header>
+
+    <section class="card input-card">
+      <h2>JSON Input</h2>
+      <p class="muted">Paste your JSON below (array or {"leads":[...]}) and click Render.</p>
+      <textarea id="jsonInput" spellcheck="false" aria-label="Lead JSON input"></textarea>
+      <div class="actions">
+        <button id="renderBtn" type="button">Render Dashboard</button>
+        <button id="formatBtn" type="button" class="secondary">Format JSON</button>
+      </div>
+      <div id="errorBox" class="error" role="alert"></div>
+    </section>
+
+    <section class="stats-grid">
+      <article class="card stat-card">
+        <h3>Total Leads</h3>
+        <p id="totalLeads" class="value">0</p>
+      </article>
+      <article class="card stat-card">
+        <h3>Qualified Leads</h3>
+        <p id="qualifiedLeads" class="value">0</p>
+      </article>
+      <article class="card stat-card">
+        <h3>Won Leads</h3>
+        <p id="wonLeads" class="value">0</p>
+      </article>
+      <article class="card stat-card">
+        <h3>Conversion Rate</h3>
+        <p id="conversionRate" class="value">0%</p>
+      </article>
+      <article class="card stat-card">
+        <h3>Pipeline Value</h3>
+        <p id="pipelineValue" class="value">$0</p>
+      </article>
+    </section>
+
+    <section class="charts-grid">
+      <article class="card">
+        <h2>Leads by Status</h2>
+        <canvas id="statusChart"></canvas>
+      </article>
+      <article class="card">
+        <h2>Leads by Source</h2>
+        <canvas id="sourceChart"></canvas>
+      </article>
+      <article class="card">
+        <h2>Lead Value by Month</h2>
+        <canvas id="valueChart"></canvas>
+      </article>
+    </section>
+
+    <section class="card">
+      <h2>Lead Table</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Source</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Value</th>
+              <th>Created At</th>
+            </tr>
+          </thead>
+          <tbody id="leadTableBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
